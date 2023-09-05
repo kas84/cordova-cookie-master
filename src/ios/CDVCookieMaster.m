@@ -12,36 +12,46 @@
 
 @implementation CDVCookieMaster
 
- - (void)getCookieValue:(CDVInvokedUrlCommand*)command
-{
-    CDVPluginResult* pluginResult = nil;
+- (void)getCookieValue:(CDVInvokedUrlCommand*)command {
+    __block CDVPluginResult* pluginResult = nil;
     NSString* urlString = [command.arguments objectAtIndex:0];
     __block NSString* cookieName = [command.arguments objectAtIndex:1];
 
+    // Get the WKWebView instance from the cordova web view
+    WKWebView *wkWebView = (WKWebView *)self.webView;
+
+    // Get the HTTPCookieStore from the WKWebView
+    WKHTTPCookieStore *cookieStore = wkWebView.configuration.websiteDataStore.httpCookieStore;
+
     if (urlString != nil) {
-        NSArray* cookies = [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookiesForURL:[NSURL URLWithString:urlString]];
-        __block NSString *cookieValue;
+        // Get all cookies from the WKHTTPCookieStore
+        [cookieStore getAllCookies:^(NSArray<NSHTTPCookie *> * cookies) {
+            __block NSString *cookieValue;
 
-        [cookies enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
-            NSHTTPCookie *cookie = obj;
-
-            if([cookie.name isEqualToString:cookieName])
-            {
-                cookieValue = cookie.value;
-                *stop = YES;
+            for (NSHTTPCookie *cookie in cookies) {
+                // Check if the cookie's name matches the one we're looking for
+                if ([cookie.name isEqualToString:cookieName]) {
+                    cookieValue = cookie.value;
+                    break;  // Exit the loop once the cookie is found
+                }
             }
-        }];
-        if (cookieValue != nil) {
-            pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:@{@"cookieValue":cookieValue}];
-        } else {
-            pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"No cookie found"];
-        }
 
+            // Check if we found a cookie with the given name
+            if (cookieValue != nil) {
+                pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:@{@"cookieValue":cookieValue}];
+            } else {
+                pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"No cookie found"];
+            }
+
+            // Return the result to the Cordova callback
+            [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        }];
     } else {
         pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"URL was null"];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
     }
-    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
+
 
  - (void)setCookieValue:(CDVInvokedUrlCommand*)command
 {
